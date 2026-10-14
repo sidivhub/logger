@@ -3,100 +3,138 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>PWA Local Database Manager</title>
+  <title>Database Manager</title>
   <link rel="stylesheet" href="style.css">
   <link rel="manifest" href="manifest.json">
-  <meta name="theme-color" content="#4f46e5">
+  <meta name="theme-color" content="#6750A4">
+  <!-- Material Symbols for Native App Icons -->
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" />
 </head>
 <body>
-  <div class="app-container">
-    <!-- Sidebar: Tables List -->
-    <aside class="sidebar">
-      <div class="sidebar-header">
-        <h2>📁 Databases</h2>
-        <button id="btn-new-table" class="btn btn-primary">+ New Table</button>
+  <div class="app-shell">
+    <!-- Top App Bar -->
+    <header class="top-app-bar">
+      <div class="app-bar-left">
+        <button id="btn-toggle-drawer" class="icon-btn" title="Open Menu">
+          <span class="material-symbols-outlined">menu</span>
+        </button>
+        <h1 id="current-table-title">My Database</h1>
+      </div>
+      <div class="app-bar-actions">
+        <button id="btn-manage-columns" class="icon-btn" title="Columns" disabled>
+          <span class="material-symbols-outlined">view_column</span>
+        </button>
+        <button id="btn-export-json" class="icon-btn" title="Export JSON" disabled>
+          <span class="material-symbols-outlined">download</span>
+        </button>
+        <label class="icon-btn file-upload-label" id="lbl-import" title="Import" style="opacity: 0.3; pointer-events: none;">
+          <span class="material-symbols-outlined">upload</span>
+          <input type="file" id="import-file" accept=".json, .csv" hidden disabled>
+        </label>
+      </div>
+    </header>
+
+    <!-- Navigation Drawer / Sidebar (Slide-in on Mobile) -->
+    <aside class="nav-drawer" id="nav-drawer">
+      <div class="drawer-header">
+        <h2>Databases</h2>
+        <button id="btn-new-table" class="btn-tonal">
+          <span class="material-symbols-outlined">add</span> New Table
+        </button>
       </div>
       <ul id="table-list" class="table-list">
         <!-- Dynamically populated tables -->
       </ul>
     </aside>
+    <div class="drawer-scrim" id="drawer-scrim"></div>
 
     <!-- Main Content Area -->
     <main class="main-content">
-      <header class="main-header">
-        <h1 id="current-table-title">Select or Create a Table</h1>
-        <div class="header-actions">
-          <button id="btn-manage-columns" class="btn btn-secondary" disabled>⚙️ Columns</button>
-          <button id="btn-export-json" class="btn btn-secondary" disabled>📤 Export JSON</button>
-          <button id="btn-export-csv" class="btn btn-secondary" disabled>📤 Export CSV</button>
-          <label class="btn btn-secondary file-upload-label" id="lbl-import" style="opacity: 0.5; pointer-events: none;">
-            📥 Import <input type="file" id="import-file" accept=".json, .csv" hidden disabled>
-          </label>
+      <!-- Search & Sort Filter Bar -->
+      <section class="filter-bar" id="toolbar" style="display: none;">
+        <div class="search-box">
+          <span class="material-symbols-outlined">search</span>
+          <input type="text" id="search-input" placeholder="Search records...">
         </div>
-      </header>
-
-      <!-- Toolbar: Search, Sort, Filter -->
-      <section class="toolbar" id="toolbar" style="display: none;">
-        <input type="text" id="search-input" placeholder="Search records..." class="input">
-        <select id="sort-select" class="input">
+        <select id="sort-select" class="native-select">
           <option value="">Sort by...</option>
         </select>
-        <button id="btn-add-record" class="btn btn-success">+ Add Record</button>
       </section>
 
       <!-- Data Table View -->
       <div class="table-responsive" id="table-view-container">
-        <p class="placeholder-text">Choose a table from the sidebar to view data.</p>
+        <div class="empty-state">
+          <span class="material-symbols-outlined">database</span>
+          <p>Select or create a table from the menu</p>
+        </div>
       </div>
     </main>
+
+    <!-- Floating Action Button (FAB) -->
+    <button id="btn-add-record" class="fab" style="display: none;" title="Add Record">
+      <span class="material-symbols-outlined">add</span>
+      <span class="fab-text">New Record</span>
+    </button>
   </div>
 
-  <!-- Modal: Create/Edit Table -->
-  <div id="modal-table" class="modal">
-    <div class="modal-content">
+  <!-- Bottom Sheet / Modal: Create Table -->
+  <div id="modal-table" class="modal-sheet">
+    <div class="sheet-card">
+      <div class="sheet-handle"></div>
       <h3>Create New Table</h3>
-      <input type="text" id="table-name-input" placeholder="Table Name (e.g., Inventory)" class="input">
-      <div class="modal-buttons">
-        <button id="modal-table-cancel" class="btn btn-secondary">Cancel</button>
-        <button id="modal-table-save" class="btn btn-primary">Create</button>
+      <div class="input-container">
+        <input type="text" id="table-name-input" placeholder=" " class="material-input">
+        <label>Table Name</label>
+      </div>
+      <div class="sheet-actions">
+        <button id="modal-table-cancel" class="btn-text">Cancel</button>
+        <button id="modal-table-save" class="btn-filled">Create</button>
       </div>
     </div>
   </div>
 
   <!-- Modal: Manage Columns -->
-  <div id="modal-columns" class="modal">
-    <div class="modal-content modal-large">
+  <div id="modal-columns" class="modal-sheet">
+    <div class="sheet-card sheet-large">
+      <div class="sheet-handle"></div>
       <h3>Manage Columns</h3>
       <div id="columns-list" class="columns-list"></div>
-      <hr>
-      <h4>Add New Column</h4>
+      <hr class="divider">
+      <h4>Add Column</h4>
       <div class="column-form">
-        <input type="text" id="col-name" placeholder="Column Name" class="input">
-        <select id="col-type" class="input">
+        <div class="input-container">
+          <input type="text" id="col-name" placeholder=" " class="material-input">
+          <label>Column Name</label>
+        </div>
+        <select id="col-type" class="native-select">
           <option value="text">Text</option>
           <option value="number">Number</option>
           <option value="date">Date</option>
-          <option value="boolean">Boolean (True/False)</option>
+          <option value="boolean">Boolean (Yes/No)</option>
           <option value="select">Select (Dropdown)</option>
         </select>
-        <input type="text" id="col-options" placeholder="Options (comma-separated for select)" class="input" style="display:none;">
-        <button id="btn-add-column" class="btn btn-primary">Add Column</button>
       </div>
-      <div class="modal-buttons">
-        <button id="modal-columns-close" class="btn btn-secondary">Close</button>
+      <div class="input-container" id="col-options-container" style="display:none; margin-top: 12px;">
+        <input type="text" id="col-options" placeholder=" " class="material-input">
+        <label>Options (comma separated)</label>
+      </div>
+      <button id="btn-add-column" class="btn-tonal" style="width: 100%; margin-top: 12px;">Add Column</button>
+      <div class="sheet-actions" style="margin-top: 20px;">
+        <button id="modal-columns-close" class="btn-filled">Done</button>
       </div>
     </div>
   </div>
 
   <!-- Modal: Add/Edit Record -->
-  <div id="modal-record" class="modal">
-    <div class="modal-content">
+  <div id="modal-record" class="modal-sheet">
+    <div class="sheet-card">
+      <div class="sheet-handle"></div>
       <h3 id="record-modal-title">Add Record</h3>
       <form id="record-form">
         <div id="record-fields-container" class="record-fields"></div>
-        <div class="modal-buttons">
-          <button type="button" id="modal-record-cancel" class="btn btn-secondary">Cancel</button>
-          <button type="submit" class="btn btn-primary">Save Record</button>
+        <div class="sheet-actions">
+          <button type="button" id="modal-record-cancel" class="btn-text">Cancel</button>
+          <button type="submit" class="btn-filled">Save</button>
         </div>
       </form>
     </div>
@@ -105,9 +143,20 @@
   <script src="app.js"></script>
   <script>
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('sw.js')
-        .then(() => console.log('Service Worker Registered'));
+      navigator.serviceWorker.register('sw.js').catch(() => {});
     }
+
+    // Native App Drawer behavior toggle
+    const drawer = document.getElementById('nav-drawer');
+    const scrim = document.getElementById('drawer-scrim');
+    document.getElementById('btn-toggle-drawer').onclick = () => {
+      drawer.classList.toggle('open');
+      scrim.classList.toggle('open');
+    };
+    scrim.onclick = () => {
+      drawer.classList.remove('open');
+      scrim.classList.remove('open');
+    };
   </script>
 </body>
 </html>
