@@ -5,22 +5,46 @@ let currentRecords = [];
 let editingRecordId = null;
 
 // IndexedDB Initialization
-const request = indexedDB.open('PWA_CRUD_DB', 1);
+const DB_NAME = 'PWA_CRUD_DB';
 
-request.onupgradeneeded = (event) => {
-  db = event.target.result;
-  if (!db.objectStoreNames.contains('metadata')) {
-    db.createObjectStore('metadata', { keyPath: 'tableName' });
-  }
-};
+function openDatabase(version) {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME, version);
 
-request.onsuccess = (event) => {
-  db = event.target.result;
+    request.onupgradeneeded = (event) => {
+      const database = event.target.result;
+      // Ensure metadata store always exists
+      if (!database.objectStoreNames.contains('metadata')) {
+        database.objectStoreNames.contains('metadata') || database.createObjectStore('metadata', { keyPath: 'tableName' });
+      }
+      // If a table name was passed in during upgrade, create its store
+      if (event.target.transaction.db.pendingStoreName) {
+        const storeName = event.target.transaction.db.pendingStoreName;
+        if (!database.objectStoreNames.contains(storeName)) {
+          database.createObjectStore(storeName, { keyPath: 'id' });
+        }
+      }
+    };
+
+    request.onsuccess = (event) => {
+      resolve(event.target.result);
+    };
+
+    request.onerror = (event) => {
+      reject(event.target.error);
+    };
+  });
+}
+
+async function initDB() {
+  db = await openDatabase();
   loadTablesList();
-};
+}
 
-request.onerror = (event) => {
-  console.error('IndexedDB error:', event.target.error);
+// Initial load check to get highest current version
+indexedDB.open(DB_NAME).onsuccess = (e) => {
+  db = e.target.result;
+  loadTablesList();
 };
 
 // --- DOM Elements ---
@@ -54,6 +78,7 @@ function getObjectStore(storeName, mode = 'readonly') {
 }
 
 function loadTablesList() {
+  if (!db.objectStoreNames.contains('metadata')) return;
   tableListEl.innerHTML = '';
   const store = getObjectStore('metadata', 'readonly');
   const req = store.openCursor();
@@ -66,6 +91,7 @@ function loadTablesList() {
       li.className = `table-item ${currentTable === meta.tableName ? 'active' : ''}`;
       li.innerHTML = `<span>${meta.tableName}</span> <button class="delete-table" title="Delete Table">🗑️</button>`;
       
+      li.querySelector('spanonclick = () => selectTable(meta.tableName);
       li.querySelector('span').onclick = () => selectTable(meta.tableName);
       li.querySelector('.delete-table').onclick = (ev) => {
         ev.stopPropagation();
@@ -89,11 +115,12 @@ function selectTable(tableName) {
   lblImport.style.pointerEvents = 'auto';
   toolbarEl.style.display = 'flex';
 
-  loadTablesList(); // refresh active class
+  loadTablesList(); 
   fetchTableData();
 }
 
 function fetchTableData() {
+  if (!db.objectStoreNames.contains('metadata')) return;
   const metaStore = getObjectStore('metadata', 'readonly');
   const req = metaStore.get(currentTable);
 
@@ -101,7 +128,6 @@ function fetchTableData() {
     const meta = req.result;
     currentColumns = meta ? meta.columns : [];
     
-    // Open dynamic data store
     if (!db.objectStoreNames.contains(currentTable)) {
       currentRecords = [];
       renderTable();
@@ -186,7 +212,6 @@ function escapeHtml(str) {
   return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-// --- Event Listeners & Search/Sort ---
 searchInput.oninput = renderTable;
 sortSelect.onchange = renderTable;
 
@@ -197,7 +222,8 @@ btnNewTable.onclick = () => {
 };
 
 document.getElementById('modal-table-cancel').onclick = () => modalTable.classList.remove('open');
-document.getElementById('modal-table-save').onclick = () => {
+
+document.getElementById('modal-table-save').onclick = async () => {
   const name = tableNameInput.value.trim();
   if (!name) return alert('Enter table name');
   
@@ -205,21 +231,29 @@ document.getElementById('modal-table-save').onclick = () => {
     return alert('Table already exists');
   }
 
-  // Re-open DB version to create new object store dynamically
+  const currentVersion = db.version;
   db.close();
-  const newVersion = db.version + 1;
-  const openReq = indexedDB.open('PWA_CRUD_DB', newVersion);
 
-  openReq.onupgradeneeded = (e) => {
+  // Open database with incremented version to trigger onupgradeneeded and create the store
+  const newReq = indexedDB.open(DB_NAME, currentVersion + 1);
+
+  newReq.onupgradeneeded = (e) => {
     const upgradedDb = e.target.result;
-    upgradedDb.createObjectStore(name, { keyPath: 'id' });
+    if (!upgradedDb.objectStoreNames.contains(name)) {
+      upgradedDb.createObjectStore(name, { keyPath: 'id' });
+    }
+    if (!upgradedDb.objectStoreNames.contains('metadata')) {
+      upgradedDb.createObjectStore('metadata', { keyPath: 'tableName' });
+    }
   };
 
-  openReq.onsuccess = (e) => {
+  newReq.onsuccess = (e) => {
     db = e.target.result;
-    // Save metadata
     const tx = db.transaction('metadata', 'readwrite');
-    tx.objectStore('metadata').put({ tableName: name, columns: [{ name: 'id', type: 'text' }, { name: 'Name', type: 'text' }] });
+    tx.objectStore('metadata').put({ 
+      tableName: name, 
+      columns: [{ name: 'id', type: 'text' }, { name: 'Name', type: 'text' }] 
+    });
     
     tx.oncomplete = () => {
       modalTable.classList.remove('open');
@@ -227,23 +261,29 @@ document.getElementById('modal-table-save').onclick = () => {
       selectTable(name);
     };
   };
+
+  newReq.onerror = (e) => {
+    alert('Failed to create table storage.');
+    console.error(e.target.error);
+  };
 };
 
 function deleteTable(tableName) {
   if (!confirm(`Delete table "${tableName}" and all its records?`)) return;
   
+  const currentVersion = db.version;
   db.close();
-  const newVersion = db.version + 1;
-  const openReq = indexedDB.open('PWA_CRUD_DB', newVersion);
 
-  openReq.onupgradeneeded = (e) => {
+  const newReq = indexedDB.open(DB_NAME, currentVersion + 1);
+
+  newReq.onupgradeneeded = (e) => {
     const upgradedDb = e.target.result;
     if (upgradedDb.objectStoreNames.contains(tableName)) {
       upgradedDb.deleteObjectStore(tableName);
     }
   };
 
-  openReq.onsuccess = (e) => {
+  newReq.onsuccess = (e) => {
     db = e.target.result;
     const tx = db.transaction('metadata', 'readwrite');
     tx.objectStore('metadata').delete(tableName);
@@ -301,7 +341,6 @@ document.getElementById('btn-add-column').onclick = () => {
 
   currentColumns.push({ name, type, options });
 
-  // Save metadata
   const tx = db.transaction('metadata', 'readwrite');
   tx.objectStore('metadata').put({ tableName: currentTable, columns: currentColumns });
 
@@ -377,7 +416,7 @@ function buildRecordForm(data) {
 recordForm.onsubmit = (e) => {
   e.preventDefault();
   const formData = new FormData(recordForm);
-  const record = { id: editingRecordId || 'rec_' + Date.now() + Math.random().toString(36.25).substr(2, 5) };
+  const record = { id: editingRecordId || 'rec_' + Date.now() + Math.random().toString(36).substr(2, 5) };
 
   currentColumns.forEach(col => {
     let raw = formData.get(col.name);
@@ -403,7 +442,7 @@ window.deleteRecord = (id) => {
   tx.oncomplete = () => fetchTableData();
 };
 
-// --- Import & Export (JSON / CSV) ---
+// --- Import & Export ---
 btnExportJson.onclick = () => {
   const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify({ columns: currentColumns, records: currentRecords }, null, 2));
   const dlAnchor = document.createElement('a');
@@ -470,12 +509,10 @@ importFile.onchange = (e) => {
         alert('Invalid JSON file.');
       }
     } else {
-      // CSV Import
       const lines = content.split('\n').map(l => l.trim()).filter(Boolean);
       if (lines.length === 0) return;
       const headers = lines[0].split(',').map(h => h.replace(/^"|"$/g, '').trim());
 
-      // Update columns if needed
       headers.forEach(h => {
         if (!currentColumns.some(c => c.name === h)) {
           currentColumns.push({ name: h, type: 'text' });
@@ -491,7 +528,7 @@ importFile.onchange = (e) => {
 
         for (let i = 1; i < lines.length; i++) {
           const vals = lines[i].split(',').map(v => v.replace(/^"|"$/g, ''));
-          const record = { id: 'rec_' + Date.now() + Math.random().toString(36.25).substr(2, 5) };
+          const record = { id: 'rec_' + Date.now() + Math.random().toString(36).substr(2, 5) };
           headers.forEach((h, idx) => {
             record[h] = vals[idx] !== undefined ? vals[idx] : '';
           });
@@ -514,22 +551,46 @@ let currentRecords = [];
 let editingRecordId = null;
 
 // IndexedDB Initialization
-const request = indexedDB.open('PWA_CRUD_DB', 1);
+const DB_NAME = 'PWA_CRUD_DB';
 
-request.onupgradeneeded = (event) => {
-  db = event.target.result;
-  if (!db.objectStoreNames.contains('metadata')) {
-    db.createObjectStore('metadata', { keyPath: 'tableName' });
-  }
-};
+function openDatabase(version) {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME, version);
 
-request.onsuccess = (event) => {
-  db = event.target.result;
+    request.onupgradeneeded = (event) => {
+      const database = event.target.result;
+      // Ensure metadata store always exists
+      if (!database.objectStoreNames.contains('metadata')) {
+        database.objectStoreNames.contains('metadata') || database.createObjectStore('metadata', { keyPath: 'tableName' });
+      }
+      // If a table name was passed in during upgrade, create its store
+      if (event.target.transaction.db.pendingStoreName) {
+        const storeName = event.target.transaction.db.pendingStoreName;
+        if (!database.objectStoreNames.contains(storeName)) {
+          database.createObjectStore(storeName, { keyPath: 'id' });
+        }
+      }
+    };
+
+    request.onsuccess = (event) => {
+      resolve(event.target.result);
+    };
+
+    request.onerror = (event) => {
+      reject(event.target.error);
+    };
+  });
+}
+
+async function initDB() {
+  db = await openDatabase();
   loadTablesList();
-};
+}
 
-request.onerror = (event) => {
-  console.error('IndexedDB error:', event.target.error);
+// Initial load check to get highest current version
+indexedDB.open(DB_NAME).onsuccess = (e) => {
+  db = e.target.result;
+  loadTablesList();
 };
 
 // --- DOM Elements ---
@@ -563,6 +624,7 @@ function getObjectStore(storeName, mode = 'readonly') {
 }
 
 function loadTablesList() {
+  if (!db.objectStoreNames.contains('metadata')) return;
   tableListEl.innerHTML = '';
   const store = getObjectStore('metadata', 'readonly');
   const req = store.openCursor();
@@ -575,6 +637,7 @@ function loadTablesList() {
       li.className = `table-item ${currentTable === meta.tableName ? 'active' : ''}`;
       li.innerHTML = `<span>${meta.tableName}</span> <button class="delete-table" title="Delete Table">🗑️</button>`;
       
+      li.querySelector('spanonclick = () => selectTable(meta.tableName);
       li.querySelector('span').onclick = () => selectTable(meta.tableName);
       li.querySelector('.delete-table').onclick = (ev) => {
         ev.stopPropagation();
@@ -598,11 +661,12 @@ function selectTable(tableName) {
   lblImport.style.pointerEvents = 'auto';
   toolbarEl.style.display = 'flex';
 
-  loadTablesList(); // refresh active class
+  loadTablesList(); 
   fetchTableData();
 }
 
 function fetchTableData() {
+  if (!db.objectStoreNames.contains('metadata')) return;
   const metaStore = getObjectStore('metadata', 'readonly');
   const req = metaStore.get(currentTable);
 
@@ -610,7 +674,6 @@ function fetchTableData() {
     const meta = req.result;
     currentColumns = meta ? meta.columns : [];
     
-    // Open dynamic data store
     if (!db.objectStoreNames.contains(currentTable)) {
       currentRecords = [];
       renderTable();
@@ -695,7 +758,6 @@ function escapeHtml(str) {
   return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-// --- Event Listeners & Search/Sort ---
 searchInput.oninput = renderTable;
 sortSelect.onchange = renderTable;
 
@@ -706,7 +768,8 @@ btnNewTable.onclick = () => {
 };
 
 document.getElementById('modal-table-cancel').onclick = () => modalTable.classList.remove('open');
-document.getElementById('modal-table-save').onclick = () => {
+
+document.getElementById('modal-table-save').onclick = async () => {
   const name = tableNameInput.value.trim();
   if (!name) return alert('Enter table name');
   
@@ -714,21 +777,29 @@ document.getElementById('modal-table-save').onclick = () => {
     return alert('Table already exists');
   }
 
-  // Re-open DB version to create new object store dynamically
+  const currentVersion = db.version;
   db.close();
-  const newVersion = db.version + 1;
-  const openReq = indexedDB.open('PWA_CRUD_DB', newVersion);
 
-  openReq.onupgradeneeded = (e) => {
+  // Open database with incremented version to trigger onupgradeneeded and create the store
+  const newReq = indexedDB.open(DB_NAME, currentVersion + 1);
+
+  newReq.onupgradeneeded = (e) => {
     const upgradedDb = e.target.result;
-    upgradedDb.createObjectStore(name, { keyPath: 'id' });
+    if (!upgradedDb.objectStoreNames.contains(name)) {
+      upgradedDb.createObjectStore(name, { keyPath: 'id' });
+    }
+    if (!upgradedDb.objectStoreNames.contains('metadata')) {
+      upgradedDb.createObjectStore('metadata', { keyPath: 'tableName' });
+    }
   };
 
-  openReq.onsuccess = (e) => {
+  newReq.onsuccess = (e) => {
     db = e.target.result;
-    // Save metadata
     const tx = db.transaction('metadata', 'readwrite');
-    tx.objectStore('metadata').put({ tableName: name, columns: [{ name: 'id', type: 'text' }, { name: 'Name', type: 'text' }] });
+    tx.objectStore('metadata').put({ 
+      tableName: name, 
+      columns: [{ name: 'id', type: 'text' }, { name: 'Name', type: 'text' }] 
+    });
     
     tx.oncomplete = () => {
       modalTable.classList.remove('open');
@@ -736,23 +807,29 @@ document.getElementById('modal-table-save').onclick = () => {
       selectTable(name);
     };
   };
+
+  newReq.onerror = (e) => {
+    alert('Failed to create table storage.');
+    console.error(e.target.error);
+  };
 };
 
 function deleteTable(tableName) {
   if (!confirm(`Delete table "${tableName}" and all its records?`)) return;
   
+  const currentVersion = db.version;
   db.close();
-  const newVersion = db.version + 1;
-  const openReq = indexedDB.open('PWA_CRUD_DB', newVersion);
 
-  openReq.onupgradeneeded = (e) => {
+  const newReq = indexedDB.open(DB_NAME, currentVersion + 1);
+
+  newReq.onupgradeneeded = (e) => {
     const upgradedDb = e.target.result;
     if (upgradedDb.objectStoreNames.contains(tableName)) {
       upgradedDb.deleteObjectStore(tableName);
     }
   };
 
-  openReq.onsuccess = (e) => {
+  newReq.onsuccess = (e) => {
     db = e.target.result;
     const tx = db.transaction('metadata', 'readwrite');
     tx.objectStore('metadata').delete(tableName);
@@ -810,7 +887,6 @@ document.getElementById('btn-add-column').onclick = () => {
 
   currentColumns.push({ name, type, options });
 
-  // Save metadata
   const tx = db.transaction('metadata', 'readwrite');
   tx.objectStore('metadata').put({ tableName: currentTable, columns: currentColumns });
 
@@ -886,7 +962,7 @@ function buildRecordForm(data) {
 recordForm.onsubmit = (e) => {
   e.preventDefault();
   const formData = new FormData(recordForm);
-  const record = { id: editingRecordId || 'rec_' + Date.now() + Math.random().toString(36.25).substr(2, 5) };
+  const record = { id: editingRecordId || 'rec_' + Date.now() + Math.random().toString(36).substr(2, 5) };
 
   currentColumns.forEach(col => {
     let raw = formData.get(col.name);
@@ -912,7 +988,7 @@ window.deleteRecord = (id) => {
   tx.oncomplete = () => fetchTableData();
 };
 
-// --- Import & Export (JSON / CSV) ---
+// --- Import & Export ---
 btnExportJson.onclick = () => {
   const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify({ columns: currentColumns, records: currentRecords }, null, 2));
   const dlAnchor = document.createElement('a');
@@ -979,12 +1055,10 @@ importFile.onchange = (e) => {
         alert('Invalid JSON file.');
       }
     } else {
-      // CSV Import
       const lines = content.split('\n').map(l => l.trim()).filter(Boolean);
       if (lines.length === 0) return;
       const headers = lines[0].split(',').map(h => h.replace(/^"|"$/g, '').trim());
 
-      // Update columns if needed
       headers.forEach(h => {
         if (!currentColumns.some(c => c.name === h)) {
           currentColumns.push({ name: h, type: 'text' });
@@ -1000,7 +1074,7 @@ importFile.onchange = (e) => {
 
         for (let i = 1; i < lines.length; i++) {
           const vals = lines[i].split(',').map(v => v.replace(/^"|"$/g, ''));
-          const record = { id: 'rec_' + Date.now() + Math.random().toString(36.25).substr(2, 5) };
+          const record = { id: 'rec_' + Date.now() + Math.random().toString(36).substr(2, 5) };
           headers.forEach((h, idx) => {
             record[h] = vals[idx] !== undefined ? vals[idx] : '';
           });
