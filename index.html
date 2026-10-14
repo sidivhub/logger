@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PWA Local Database Manager</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#4f46e5">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Sidebar: Tables List -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <h2>📁 Databases</h2>
+        <button id="btn-new-table" class="btn btn-primary">+ New Table</button>
+      </div>
+      <ul id="table-list" class="table-list">
+        <!-- Dynamically populated tables -->
+      </ul>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="main-content">
+      <header class="main-header">
+        <h1 id="current-table-title">Select or Create a Table</h1>
+        <div class="header-actions">
+          <button id="btn-manage-columns" class="btn btn-secondary" disabled>⚙️ Columns</button>
+          <button id="btn-export-json" class="btn btn-secondary" disabled>📤 Export JSON</button>
+          <button id="btn-export-csv" class="btn btn-secondary" disabled>📤 Export CSV</button>
+          <label class="btn btn-secondary file-upload-label" id="lbl-import" style="opacity: 0.5; pointer-events: none;">
+            📥 Import <input type="file" id="import-file" accept=".json, .csv" hidden disabled>
+          </label>
+        </div>
+      </header>
+
+      <!-- Toolbar: Search, Sort, Filter -->
+      <section class="toolbar" id="toolbar" style="display: none;">
+        <input type="text" id="search-input" placeholder="Search records..." class="input">
+        <select id="sort-select" class="input">
+          <option value="">Sort by...</option>
+        </select>
+        <button id="btn-add-record" class="btn btn-success">+ Add Record</button>
+      </section>
+
+      <!-- Data Table View -->
+      <div class="table-responsive" id="table-view-container">
+        <p class="placeholder-text">Choose a table from the sidebar to view data.</p>
+      </div>
+    </main>
+  </div>
+
+  <!-- Modal: Create/Edit Table -->
+  <div id="modal-table" class="modal">
+    <div class="modal-content">
+      <h3>Create New Table</h3>
+      <input type="text" id="table-name-input" placeholder="Table Name (e.g., Inventory)" class="input">
+      <div class="modal-buttons">
+        <button id="modal-table-cancel" class="btn btn-secondary">Cancel</button>
+        <button id="modal-table-save" class="btn btn-primary">Create</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Manage Columns -->
+  <div id="modal-columns" class="modal">
+    <div class="modal-content modal-large">
+      <h3>Manage Columns</h3>
+      <div id="columns-list" class="columns-list"></div>
+      <hr>
+      <h4>Add New Column</h4>
+      <div class="column-form">
+        <input type="text" id="col-name" placeholder="Column Name" class="input">
+        <select id="col-type" class="input">
+          <option value="text">Text</option>
+          <option value="number">Number</option>
+          <option value="date">Date</option>
+          <option value="boolean">Boolean (True/False)</option>
+          <option value="select">Select (Dropdown)</option>
+        </select>
+        <input type="text" id="col-options" placeholder="Options (comma-separated for select)" class="input" style="display:none;">
+        <button id="btn-add-column" class="btn btn-primary">Add Column</button>
+      </div>
+      <div class="modal-buttons">
+        <button id="modal-columns-close" class="btn btn-secondary">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Add/Edit Record -->
+  <div id="modal-record" class="modal">
+    <div class="modal-content">
+      <h3 id="record-modal-title">Add Record</h3>
+      <form id="record-form">
+        <div id="record-fields-container" class="record-fields"></div>
+        <div class="modal-buttons">
+          <button type="button" id="modal-record-cancel" class="btn btn-secondary">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save Record</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('sw.js')
+        .then(() => console.log('Service Worker Registered'));
+    }
+  </script>
+</body>
+</html>
