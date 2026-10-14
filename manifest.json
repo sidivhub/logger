@@ -1,0 +1,28 @@
+
+{
+  "id": "./",
+  "name": "Pocket Tables — Local Database",
+  "short_name": "Pocket Tables",
+  "description": "Private offline tables and records stored on your device.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f5f6f2",
+  "theme_color": "#17291f",
+  "categories": ["productivity", "utilities"],
+  "icons": [
+    {
+      "src": "./icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
